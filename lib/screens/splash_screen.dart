@@ -25,6 +25,15 @@ class _SplashScreenState extends State<SplashScreen> {
     String? token = prefs.getString('token');
     if (uid == null || token == null) {
       _showInputDialog();
+      Fluttertoast.showToast(
+        msg: "New UserID: $uid",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        timeInSecForIosWeb: 2,
+        backgroundColor: Colors.purple,
+        textColor: Colors.white,
+        fontSize: 16.0,
+      );
     } else {
       Fluttertoast.showToast(
         msg: "UserID: $uid",
