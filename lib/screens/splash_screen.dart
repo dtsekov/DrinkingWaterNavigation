@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:logger/logger.dart';
 import 'settings_screen.dart';
@@ -25,6 +26,15 @@ class _SplashScreenState extends State<SplashScreen> {
     if (uid == null || token == null) {
       _showInputDialog();
     } else {
+      Fluttertoast.showToast(
+        msg: "UserID: $uid",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        timeInSecForIosWeb: 2,
+        backgroundColor: Colors.purple,
+        textColor: Colors.white,
+        fontSize: 16.0,
+      );
       logger.d("UID: $uid, Token: $token");
     }
   }
