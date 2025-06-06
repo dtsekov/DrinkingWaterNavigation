@@ -3,6 +3,10 @@ import 'screens/splash_screen.dart';
 import 'screens/second_screen.dart';
 import 'screens/third_screen.dart';
 import 'screens/map_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login_screen.dart';
+
 
 
 
@@ -51,7 +55,7 @@ class _MainScreenState extends State<MainScreen> {
 
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Colors.blue,
+        selectedItemColor: Colors.purple,
         onTap: _onItemTapped,
       ),
     );

@@ -130,7 +130,6 @@ class _SecondScreenState extends State<SecondScreen> {
               subtitle: Text('Latitude: ${coord[1]}, Longitude: ${coord[2]}', style: TextStyle(color: Colors.blue)),
 
             );
-
           } else {
             var dbIndex = index - _coordinates.length;
             var coord = _dbCoordinates[dbIndex];
