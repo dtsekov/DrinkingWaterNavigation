@@ -81,7 +81,7 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('HelloWorldFt for MAD'),
+        title: Text('Drinking Water Navigation'),
         actions: <Widget>[
           IconButton(
             icon: Icon(Icons.settings),
@@ -98,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('Welcome to the Home Screen!'),
+            Text('Enable location permissions by tapping on the switch button.'),
             Switch(
               value: _positionStreamSubscription != null,
               onChanged: (value) {
