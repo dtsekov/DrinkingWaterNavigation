@@ -1,4 +1,4 @@
-# MADProject
+# Drinking Water Navigation
 
 ## Workspace 
 GitHub:  
