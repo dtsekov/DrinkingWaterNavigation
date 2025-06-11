@@ -1,120 +1,107 @@
+// lib/screens/settings_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '/login_screen.dart';
-
+import '../firebase_seeder.dart';
+import '../login_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
 }
 
-
 class _SettingsScreenState extends State<SettingsScreen> {
-  Map<String, TextEditingController> controllers = {};
-  Future<Map<String, dynamic>> _fetchAllPreferences() async {
+  final _dbUrlController = TextEditingController();
+  final _uidController   = TextEditingController();
+  final _tokenController = TextEditingController();
+
+  Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final keys = prefs.getKeys();
-    final Map<String, dynamic> prefsMap = {};
-    for (String key in keys) {
-      prefsMap[key] = prefs.get(key);
-      controllers[key] = TextEditingController(text: prefs.get(key).toString());
-    }
-    return prefsMap;
+    _dbUrlController.text = prefs.getString('db_url') ?? '';
+    _uidController.text   = prefs.getString('uid')    ?? '';
+    _tokenController.text = prefs.getString('token')  ?? '';
   }
-  Future<void> _updatePreference(String key, String value) async {
+
+  Future<void> _savePrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    if (value is String) {
-      prefs.setString(key, value);
-    }
+    await prefs.setString('db_url', _dbUrlController.text.trim());
+    await prefs.setString('uid',    _uidController.text.trim());
+    await prefs.setString('token',  _tokenController.text.trim());
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Settings saved')));
   }
+
+  Future<void> _resedDb() async {
+    await _savePrefs();
+    await FirebaseSeeder.seedFountains();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text('Database reseeded')));
+  }
+
+  Future<void> _logout() async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => LoginScreen()),
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  @override
+  void dispose() {
+    _dbUrlController.dispose();
+    _uidController.dispose();
+    _tokenController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text("Settings"),
-      ),
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: _fetchAllPreferences(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            if (snapshot.hasError) {
-              return Center(child: Text("Error: ${snapshot.error}"));
-            }
-            return Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    children: snapshot.data!.entries.map((entry) {
-                      return ListTile(
-                        title: Text("${entry.key}"),
-                        subtitle: TextField(
-                          controller: controllers[entry.key],
-                          decoration: InputDecoration(hintText: "Enter ${entry.key}"),
-                          onSubmitted: (value) {
-                            _updatePreference(entry.key, value);
-                          },
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    _showLogoutConfirmationDialog();
-                  },
-                  child: Text('Logout'),
-                ),
-              ],
-            );
-          } else {
-            return Center(child: CircularProgressIndicator());
-          }
-        },
-      ),
-    );
-  }
-
-  // Función para mostrar el diálogo de confirmación de logout
-  Future<void> _showLogoutConfirmationDialog() async {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Confirm Logout'),
-          content: SingleChildScrollView(
-            child: ListBody(
-              children: <Widget>[
-                Text('Are you sure you want to logout?'),
-              ],
+      appBar: AppBar(title: Text("Settings")),
+      body: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            TextField(
+              controller: _dbUrlController,
+              decoration: InputDecoration(labelText: 'Database URL'),
             ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop(); // Cierra el diálogo
-              },
+            SizedBox(height: 8),
+            TextField(
+              controller: _uidController,
+              decoration: InputDecoration(labelText: 'User UID'),
             ),
-            TextButton(
+            SizedBox(height: 8),
+            TextField(
+              controller: _tokenController,
+              decoration: InputDecoration(labelText: 'Weather API Token'),
+            ),
+            SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _savePrefs,
+              child: Text('Save Settings'),
+            ),
+            SizedBox(height: 8),
+            ElevatedButton(
+              onPressed: _resedDb,
+              child: Text('Reseed Database'),
+            ),
+            Spacer(),
+            ElevatedButton(
+              onPressed: _logout,
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: Text('Logout'),
-              onPressed: () {
-                _signOut(); // Realiza el logout
-              },
             ),
           ],
-        );
-      },
-    );
-  }
-  // Función para hacer logout
-  Future<void> _signOut() async {
-    await FirebaseAuth.instance.signOut(); // Hace logout
-    // Redirige a la pantalla de login
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => LoginScreen()),
+        ),
+      ),
     );
   }
 }

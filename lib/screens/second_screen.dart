@@ -1,148 +1,198 @@
-import 'dart:io';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import '/db/database_helper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 
-
-class SecondScreen extends StatefulWidget {
+class FountainListScreen extends StatefulWidget {
   @override
-  _SecondScreenState createState() => _SecondScreenState();
+  _FountainListScreenState createState() => _FountainListScreenState();
 }
-class _SecondScreenState extends State<SecondScreen> {
-  List<List<String>> _coordinates = [];
-  List<List<String>> _dbCoordinates = []; // For coordinates from the database
+
+class _FountainListScreenState extends State<FountainListScreen> {
+  late DatabaseReference _ref;
+
+  static const int pageSize = 50;
+  List<MapEntry<String, dynamic>> _items = [];
+  String? _lastKey;
+  bool _isLoading = false;
+  bool _hasMore = true;
+  bool _initialized = false;
+  final ScrollController _scrollCtrl = ScrollController();
+
   @override
   void initState() {
     super.initState();
-    _loadCoordinates();
-    _loadDbCoordinates();
-  }
-  Future<void> _loadCoordinates() async {
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/gps_coordinates.csv');
-    List<String> lines = await file.readAsLines();
-    setState(() {
-      _coordinates = lines.map((line) => line.split(';')).toList();
-    });
-  }
-  void _loadDbCoordinatesAndUpdate() async {
-    List<Map<String, dynamic>> dbCoords = await DatabaseHelper.instance.getCoordinates();
-    setState(() {
-      _dbCoordinates = dbCoords.map((c) => [
-        c['timestamp'].toString(),
-        c['latitude'].toString(),
-        c['longitude'].toString()
-      ]).toList();
-    });
-  }
-  void _showDeleteDialog(String timestamp) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("Confirm delete ${timestamp}"),
-          content: Text("Do you want to delete this coordinate?"),
-          actions: <Widget>[
-            TextButton(
-              child: Text("Cancel"),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            TextButton(
-              child: Text("Delete"),
-              onPressed: () async {
-                await DatabaseHelper.instance.deleteCoordinate(timestamp);
-                Navigator.of(context).pop(); // Dismiss the dialog
-                _loadDbCoordinatesAndUpdate(); // Reload data and update UI
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
-  void _showUpdateDialog(String timestamp, String currentLat, String currentLong) {
-    TextEditingController latController = TextEditingController(text: currentLat);
-    TextEditingController longController = TextEditingController(text: currentLong);
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("Update coordinates for ${timestamp}"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TextField(
-                controller: latController,
-                decoration: InputDecoration(labelText: "Latitude"),
-              ),
-              TextField(
-                controller: longController,
-                decoration: InputDecoration(labelText: "Longitude"),
-              ),
-            ],
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: Text("Cancel"),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: Text("Update"),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                await DatabaseHelper.instance.updateCoordinate(timestamp, latController.text, longController.text);
-                _loadDbCoordinatesAndUpdate();
-              },
-            ),
-          ],
-        );
-      },
-    );
+    _initializeDatabase();
+    _scrollCtrl.addListener(_onScroll);
   }
 
-  Future<void> _loadDbCoordinates() async {
-    List<Map<String, dynamic>> dbCoords = await DatabaseHelper.instance.getCoordinates(); // Corrected
+  Future<void> _initializeDatabase() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dbUrl = prefs.getString('db_url');
+
+    if (dbUrl == null) {
+      // Handle missing DB URL
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Database URL not configured.')),
+      );
+      return;
+    }
+
+    final database = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: dbUrl,
+    );
+
+    _ref = database.ref().child('fountains');
+
     setState(() {
-      _dbCoordinates = dbCoords.map((c) => [
-        c['timestamp'].toString(), // Corrected
-        c['latitude'].toString(), // Corrected
-        c['longitude'].toString() // Corrected
-      ]).toList();
+      _initialized = true;
+    });
+
+    _loadNextPage();
+  }
+
+  void _onScroll() {
+    if (_scrollCtrl.position.pixels >
+        _scrollCtrl.position.maxScrollExtent - 200) {
+      _loadNextPage();
+    }
+  }
+
+  Future<void> _loadNextPage() async {
+    if (!_initialized || _isLoading || !_hasMore) return;
+
+    setState(() => _isLoading = true);
+
+    Query query = _ref.orderByKey().limitToFirst(pageSize);
+    if (_lastKey != null) {
+      query = _ref.orderByKey()
+          .startAt(_lastKey)
+          .limitToFirst(pageSize + 1);
+    }
+
+    final snapshot = await query.get();
+    final data = snapshot.value as Map<dynamic, dynamic>?;
+    if (data != null) {
+      final entries = data.entries
+          .map((e) => MapEntry(e.key as String, e.value))
+          .toList();
+      final pageItems = (_lastKey == null) ? entries : entries.sublist(1);
+
+      setState(() {
+        _items.addAll(pageItems);
+        _lastKey = entries.last.key;
+        if (pageItems.length < pageSize) {
+          _hasMore = false;
+        }
+      });
+    } else {
+      _hasMore = false;
+    }
+
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _deleteFountain(String key) async {
+    await _ref.child(key).remove();
+    setState(() {
+      _items.removeWhere((e) => e.key == key);
     });
   }
+
+  Future<void> _updateFountain(String key, double lat, double lon) async {
+    await _ref.child(key).update({
+      'latitude': lat,
+      'longitude': lon,
+    });
+    setState(() {
+      final idx = _items.indexWhere((e) => e.key == key);
+      if (idx != -1)
+        _items[idx] = MapEntry(key, {'latitude': lat, 'longitude': lon});
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Second Screen'),
-      ),
-      body: ListView.builder(
-        itemCount: _coordinates.length + _dbCoordinates.length, // Combined count
-        itemBuilder: (context, index) {
-          if (index < _coordinates.length) {
-            var coord = _coordinates[index];
-            return ListTile(
-              title: Text('DB Timestamp: ${coord[0]}', style: TextStyle(color: Colors.blue)),
-              subtitle: Text('Latitude: ${coord[1]}, Longitude: ${coord[2]}', style: TextStyle(color: Colors.blue)),
+    if (!_initialized) {
+      return Scaffold(
+        appBar: AppBar(title: Text('Fountains')),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-            );
-          } else {
-            var dbIndex = index - _coordinates.length;
-            var coord = _dbCoordinates[dbIndex];
-            return ListTile(
-              title: Text('DB Timestamp: ${coord[0]}', style: TextStyle(color: Colors.blue)),
-              subtitle: Text('Latitude: ${coord[1]}, Longitude: ${coord[2]}', style: TextStyle(color: Colors.blue)),
-              onTap: () => _showDeleteDialog(coord[0]), // Passing timestamp to the delete dialog
-              onLongPress: () => _showUpdateDialog(coord[0], coord[1], coord[2]),
-            );
+    return Scaffold(
+      appBar: AppBar(title: Text('Fountains')),
+      body: ListView.builder(
+        controller: _scrollCtrl,
+        itemCount: _items.length + (_hasMore ? 1 : 0),
+        itemBuilder: (context, i) {
+          if (i >= _items.length) {
+            return Center(child: CircularProgressIndicator());
           }
+          final key = _items[i].key;
+          final val = _items[i].value as Map<dynamic, dynamic>;
+          final lat = val['latitude'];
+          final lon = val['longitude'];
+
+          return ListTile(
+            title: Text('Fountain $key'),
+            subtitle: Text('Lat: $lat, Lon: $lon'),
+            onTap: () => _deleteConfirm(key),
+            onLongPress: () => _editDialog(key, lat, lon),
+          );
         },
       ),
     );
   }
-}
 
+  void _deleteConfirm(String key) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Delete Fountain?'),
+        content: Text('Are you sure you want to delete fountain $key?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          TextButton(onPressed: () {
+            Navigator.pop(context);
+            _deleteFountain(key);
+          }, child: Text('Delete')),
+        ],
+      ),
+    );
+  }
+
+  void _editDialog(String key, double lat, double lon) {
+    final latCtrl = TextEditingController(text: lat.toString());
+    final lonCtrl = TextEditingController(text: lon.toString());
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Edit Fountain $key'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: latCtrl, decoration: InputDecoration(labelText: 'Lat')),
+            TextField(controller: lonCtrl, decoration: InputDecoration(labelText: 'Lon')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text('Cancel')),
+          TextButton(onPressed: () {
+            Navigator.pop(context);
+            _updateFountain(key, double.parse(latCtrl.text), double.parse(lonCtrl.text));
+          }, child: Text('Save')),
+        ],
+      ),
+    );
+  }
+}

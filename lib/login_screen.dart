@@ -1,5 +1,7 @@
+import 'package:drinking_water_navigation/screens/initial_config_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 class LoginScreen extends StatefulWidget {
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -16,6 +18,15 @@ class _LoginScreenState extends State<LoginScreen> {
       )).user;
       if (user != null) {
         print('Login successful!');
+        final prefs = await SharedPreferences.getInstance();
+        final dbUrl = prefs.getString('db_url');
+        if (dbUrl == null || dbUrl.isEmpty) {
+          // First time setup
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => InitialConfigScreen()),
+          );
+        }
       } else {
         print('Login failed!');
       }

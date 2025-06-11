@@ -6,7 +6,7 @@ import 'screens/map_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
-
+import 'firebase_seeder.dart';
 
 
 
@@ -14,6 +14,9 @@ import 'login_screen.dart';
 void main() async{
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
+
+
+
   runApp(const MyApp());
 }
 class MyApp extends StatelessWidget {
@@ -49,7 +52,7 @@ class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   final List<Widget> _screens = [
     SplashScreen(),
-    SecondScreen(),
+    FountainListScreen(),
     ThirdScreen(),
     MapScreen(),
   ];
@@ -61,8 +64,9 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: _screens.elementAt(_selectedIndex),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _screens,
       ),
       bottomNavigationBar: BottomNavigationBar(
           items: const <BottomNavigationBarItem>[
